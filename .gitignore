@@ -5,3 +5,7 @@
 /src/libbpf
 /src/pkgconfig
 /src/*.a
+/libbpf-tools/.output
+/libbpf-tools/libbpf
+/libbpf-tools/pkgconfig
+/libbpf-tools/*.a

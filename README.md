@@ -22,3 +22,12 @@ wsl + vscode + clangd
 ```
 cd src && make
 ```
+
+# bcc turns to libbpf's tools
+
+
+* build
+Support for cross-compilation can run on the android platform libbpf-tools
+```
+cd libbpf-tools && make
+```
