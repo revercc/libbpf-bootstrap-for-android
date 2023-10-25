@@ -1,0 +1,21 @@
+/home/reverccqin/ebpf/libbpf-bootstrap-for-android/libbpf-tools/.output/bpftool/bootstrap/common.o: \
+ common.c \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/bpftool/include/linux/filter.h \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/bpftool/include/uapi/linux/bpf.h \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/bpftool/include/linux/types.h \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/bpftool/include/uapi/linux/bpf_common.h \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/libbpf-tools/.output/bpftool/bootstrap/libbpf/include/bpf/bpf.h \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/libbpf-tools/.output/bpftool/bootstrap/libbpf/include/bpf/libbpf_common.h \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/libbpf-tools/.output/bpftool/bootstrap/libbpf/include/bpf/libbpf_version.h \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/libbpf-tools/.output/bpftool/bootstrap/libbpf/include/bpf/libbpf_legacy.h \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/libbpf-tools/.output/bpftool/bootstrap/libbpf/include/bpf/hashmap.h \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/libbpf-tools/.output/bpftool/bootstrap/libbpf/include/bpf/libbpf.h \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/libbpf-tools/.output/bpftool/bootstrap/libbpf/include/bpf/btf.h \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/bpftool/include/uapi/linux/btf.h \
+ main.h \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/bpftool/include/linux/compiler.h \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/bpftool/include/linux/compiler_types.h \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/bpftool/include/linux/compiler-gcc.h \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/bpftool/include/linux/kernel.h \
+ /home/reverccqin/ebpf/libbpf-bootstrap-for-android/bpftool/include/linux/build_bug.h \
+ json_writer.h
