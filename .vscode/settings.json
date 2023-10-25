@@ -1,0 +1,6 @@
+{
+    "clangd.fallbackFlags": [
+        "-I${workspaceFolder}/src",
+        "-I${workspaceFolder}/src/.output",
+        "-I${workspaceFolder}/vmlinux/arm64"
+}

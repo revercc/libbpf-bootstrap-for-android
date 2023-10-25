@@ -1,0 +1,7 @@
+/bin
+/.idea
+/.clang-format
+/src/.output
+/src/libbpf
+/src/pkgconfig
+/src/*.a
