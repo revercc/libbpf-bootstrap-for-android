@@ -2,6 +2,7 @@
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_core_read.h>
+#include <bpf/bpf_tracing.h>
 #include "execsnoop.h"
 
 const volatile bool filter_cg = false;
@@ -34,16 +35,21 @@ struct {
 static __always_inline bool valid_uid(uid_t uid) {
 	return uid != INVALID_UID;
 }
-
-SEC("tracepoint/syscalls/sys_enter_execve")
-int tracepoint__syscalls__sys_enter_execve(struct trace_event_raw_sys_enter* ctx)
+/*
+static int do_execveat_common(int fd, struct filename *filename,
+			      struct user_arg_ptr argv,
+			      struct user_arg_ptr envp,
+			      int flags)
+*/
+SEC("kprobe/do_execveat_common")
+int BPF_KPROBE(do_execveat_common)
 {
 	u64 id;
 	pid_t pid, tgid;
 	int ret;
 	struct event *event;
 	struct task_struct *task;
-	const char **args = (const char **)(ctx->args[1]);
+	const char **args = (const char **)PT_REGS_PARM6(ctx);
 	const char *argp;
 
 	if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
@@ -72,10 +78,20 @@ int tracepoint__syscalls__sys_enter_execve(struct trace_event_raw_sys_enter* ctx
 	event->args_count = 0;
 	event->args_size = 0;
 
-	ret = bpf_probe_read_user_str(event->args, ARGSIZE, (const char*)ctx->args[0]);
+	struct filename * p_file_name;
+	p_file_name = (struct filename *)PT_REGS_PARM2(ctx);
+	bpf_printk("p_file_name is %p", p_file_name);
+	char* p_name;
+	ret = bpf_probe_read_kernel(&p_name, sizeof(p_name), p_file_name);
+	if(ret < 0){
+		return 0;
+	}
+
+	ret = bpf_probe_read_kernel_str(event->args, ARGSIZE, p_name);
 	if (ret < 0) {
 		return 0;
 	}
+
 	if (ret <= ARGSIZE) {
 		event->args_size += ret;
 	} else {
@@ -83,8 +99,8 @@ int tracepoint__syscalls__sys_enter_execve(struct trace_event_raw_sys_enter* ctx
 		event->args[0] = '\0';
 		event->args_size++;
 	}
-
 	event->args_count++;
+	
 	#pragma unroll
 	for (i = 1; i < TOTAL_MAX_ARGS && i < max_args; i++) {
 		ret = bpf_probe_read_user(&argp, sizeof(argp), &args[i]);
@@ -111,8 +127,8 @@ int tracepoint__syscalls__sys_enter_execve(struct trace_event_raw_sys_enter* ctx
 	return 0;
 }
 
-SEC("tracepoint/syscalls/sys_exit_execve")
-int tracepoint__syscalls__sys_exit_execve(struct trace_event_raw_sys_exit* ctx)
+SEC("kretprobe/do_execveat_common")
+int BPF_KRETPROBE(do_execveat_common_exit)
 {
 	u64 id;
 	pid_t pid;
@@ -131,7 +147,7 @@ int tracepoint__syscalls__sys_exit_execve(struct trace_event_raw_sys_exit* ctx)
 	event = bpf_map_lookup_elem(&execs, &pid);
 	if (!event)
 		return 0;
-	ret = ctx->ret;
+	ret = PT_REGS_RC(ctx);
 	if (ignore_failed && ret < 0)
 		goto cleanup;
 
