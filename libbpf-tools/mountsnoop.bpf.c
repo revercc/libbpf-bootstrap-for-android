@@ -91,37 +91,67 @@ cleanup:
 	return 0;
 }
 
-SEC("tracepoint/syscalls/sys_enter_mount")
-int mount_entry(struct trace_event_raw_sys_enter *ctx)
+/*
+__arm64_sys_mount(const struct pt_regs *regs)
+*/
+SEC("kprobe/__arm64_sys_mount")
+int BPF_KPROBE(__arm64_sys_mount)
 {
-	const char *src = (const char *)ctx->args[0];
-	const char *dest = (const char *)ctx->args[1];
-	const char *fs = (const char *)ctx->args[2];
-	__u64 flags = (__u64)ctx->args[3];
-	const char *data = (const char *)ctx->args[4];
-
+	const struct pt_regs *regs = (struct pt_regs*)PT_REGS_PARM1(ctx);
+	const char *src;
+	if(bpf_probe_read_kernel(&src, sizeof(src), regs) < 0){
+		bpf_printk("error0");
+		return 0;
+	}
+	const char *dest;
+	if(bpf_probe_read_kernel(&dest, sizeof(dest), (char*)regs + sizeof(u64)) < 0){
+		bpf_printk("error1");
+		return 0;
+	}
+	const char *fs;
+	if(bpf_probe_read_kernel(&fs, sizeof(fs), (char*)regs + sizeof(u64) * 2) < 0){
+		bpf_printk("error2");
+		return 0;
+	}
+	__u64 flags;
+	if(bpf_probe_read_kernel(&flags, sizeof(flags), (char*)regs + sizeof(u64) * 3) < 0){
+		bpf_printk("error3");
+		return 0;
+	}
+	const char *data;
+	if(bpf_probe_read_kernel(&data, sizeof(data), (char*)regs + sizeof(u64) * 4) < 0){
+		bpf_printk("error4");
+		return 0;
+	}
+	bpf_printk("success");
 	return probe_entry(src, dest, fs, flags, data, MOUNT);
 }
 
-SEC("tracepoint/syscalls/sys_exit_mount")
-int mount_exit(struct trace_event_raw_sys_exit *ctx)
+SEC("kprobe/__arm64_sys_umount")
+int BPF_KPROBE(__arm64_sys_umount)
 {
-	return probe_exit(ctx, (int)ctx->ret);
-}
-
-SEC("tracepoint/syscalls/sys_enter_umount")
-int umount_entry(struct trace_event_raw_sys_enter *ctx)
-{
-	const char *dest = (const char *)ctx->args[0];
-	__u64 flags = (__u64)ctx->args[1];
-
+	struct pt_regs *regs = (struct pt_regs*)PT_REGS_PARM1(ctx);
+	const char *dest;
+	if(bpf_probe_read_kernel(&dest, sizeof(dest), regs) < 0){
+		return 0;
+	}
+	__u64 flags;
+	if(bpf_probe_read_kernel(&flags, sizeof(flags), (char*)regs + sizeof(u64)) < 0){
+		return 0;
+	}
 	return probe_entry(NULL, dest, NULL, flags, NULL, UMOUNT);
 }
 
-SEC("tracepoint/syscalls/sys_exit_umount")
-int umount_exit(struct trace_event_raw_sys_exit *ctx)
+SEC("kretprobe/__arm64_sys_mount")
+int BPF_KPROBE(mount_exit)
 {
-	return probe_exit(ctx, (int)ctx->ret);
+	return probe_exit(ctx, (int)PT_REGS_RC(ctx));
+}
+
+SEC("kretprobe/__arm64_sys_umount")
+int BPF_KRETPROBE(umount_exit)
+{
+	return probe_exit(ctx, (int)PT_REGS_RC(ctx));
 }
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
