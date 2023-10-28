@@ -30,11 +30,6 @@ COMMON_OBJ = \
 	$(if $(ENABLE_MIN_CORE_BTFS),$(OUTPUT)/min_core_btf_tar.o) \
 	#
 
-BZ_APPS = \
-	memleak \
-	opensnoop \
-	#
-
 APPS = \
 	bashreadline \
 	bindsnoop \
@@ -88,7 +83,8 @@ APPS = \
 	tcptop \
 	vfsstat \
 	wakeuptime \
-	$(BZ_APPS) \
+	memleak \
+	opensnoop \
 
 
 CARGO ?= $(shell which cargo)

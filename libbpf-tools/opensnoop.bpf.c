@@ -3,6 +3,7 @@
 // Copyright (c) 2020 Netflix
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
+#include "bpf/bpf_tracing.h"
 #include "opensnoop.h"
 
 const volatile pid_t targ_pid = 0;
@@ -46,8 +47,11 @@ bool trace_allowed(u32 tgid, u32 pid)
 	return true;
 }
 
-SEC("tracepoint/syscalls/sys_enter_open")
-int tracepoint__syscalls__sys_enter_open(struct trace_event_raw_sys_enter* ctx)
+/*
+SYSCALL_DEFINE3(open, const char __user *, filename, int, flags, umode_t, mode)
+*/
+SEC("kprobe/__arm64_sys_open")
+int BPF_KPROBE(__arm64_sys_open)
 {
 	u64 id = bpf_get_current_pid_tgid();
 	/* use kernel terminology here for tgid/pid: */
@@ -57,15 +61,31 @@ int tracepoint__syscalls__sys_enter_open(struct trace_event_raw_sys_enter* ctx)
 	/* store arg info for later lookup */
 	if (trace_allowed(tgid, pid)) {
 		struct args_t args = {};
-		args.fname = (const char *)ctx->args[0];
-		args.flags = (int)ctx->args[1];
+
+		struct pt_regs *regs = (struct pt_regs*)PT_REGS_PARM1(ctx);
+		if(bpf_probe_read_kernel(&args.fname, sizeof(args.fname), regs) < 0){
+			return 0;
+		}
+		if(bpf_probe_read_kernel(&args.flags, sizeof(args.flags), (char*)regs + sizeof(u64))){
+			return 0;
+		}
+		char buf[5];
+		if(bpf_probe_read_user_str(&buf, sizeof(buf), args.fname) < 0){
+			bpf_printk("fname : %p", args.fname);
+			return 0;
+		}
+		bpf_printk("fname is : %s ", buf);
 		bpf_map_update_elem(&start, &pid, &args, 0);
 	}
 	return 0;
 }
 
-SEC("tracepoint/syscalls/sys_enter_openat")
-int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter* ctx)
+/*
+SYSCALL_DEFINE4(openat, int, dfd, const char __user *, filename, int, flags,
+		umode_t, mode)
+*/
+SEC("kprobe/__arm64_sys_openat")
+int BPF_KPROBE(__arm64_sys_openat)
 {
 	u64 id = bpf_get_current_pid_tgid();
 	/* use kernel terminology here for tgid/pid: */
@@ -75,26 +95,29 @@ int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter* ctx
 	/* store arg info for later lookup */
 	if (trace_allowed(tgid, pid)) {
 		struct args_t args = {};
-		args.fname = (const char *)ctx->args[1];
-		args.flags = (int)ctx->args[2];
+		struct pt_regs *regs = (struct pt_regs*)PT_REGS_PARM1(ctx);
+		if(bpf_probe_read_kernel(&args.fname, sizeof(args.fname), (char*)regs + sizeof(u64)) < 0){
+			return 0;
+		}
+		if(bpf_probe_read_kernel(&args.flags, sizeof(args.flags), (char*)regs + sizeof(u64) * 2) < 0){
+			return 0;
+		}
 		bpf_map_update_elem(&start, &pid, &args, 0);
 	}
 	return 0;
 }
 
 static __always_inline
-int trace_exit(struct trace_event_raw_sys_exit* ctx)
+int trace_exit(void* ctx, int ret)
 {
 	struct event event = {};
 	struct args_t *ap;
 	uintptr_t stack[3];
-	int ret;
 	u32 pid = bpf_get_current_pid_tgid();
 
 	ap = bpf_map_lookup_elem(&start, &pid);
 	if (!ap)
 		return 0;	/* missed entry */
-	ret = ctx->ret;
 	if (targ_failed && ret >= 0)
 		goto cleanup;	/* want failed only */
 
@@ -112,6 +135,7 @@ int trace_exit(struct trace_event_raw_sys_exit* ctx)
 	event.callers[0] = stack[1];
 	event.callers[1] = stack[2];
 
+	bpf_printk("event.fname is : %s", event.fname);
 	/* emit event */
 	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
 			      &event, sizeof(event));
@@ -121,16 +145,16 @@ cleanup:
 	return 0;
 }
 
-SEC("tracepoint/syscalls/sys_exit_open")
-int tracepoint__syscalls__sys_exit_open(struct trace_event_raw_sys_exit* ctx)
+SEC("kretprobe/__arm64_sys_open")
+int BPF_KRETPROBE(__arm64_sys_open__exit)
 {
-	return trace_exit(ctx);
+	return trace_exit(ctx, (int)PT_REGS_RC(ctx));
 }
 
-SEC("tracepoint/syscalls/sys_exit_openat")
-int tracepoint__syscalls__sys_exit_openat(struct trace_event_raw_sys_exit* ctx)
+SEC("kretprobe/__arm64_sys_openat")
+int BPF_KRETPROBE(__arm64_sys_openat_exit)
 {
-	return trace_exit(ctx);
+	return trace_exit(ctx, (int)PT_REGS_RC(ctx));
 }
 
 char LICENSE[] SEC("license") = "GPL";
