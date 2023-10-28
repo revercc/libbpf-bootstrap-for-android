@@ -210,12 +210,12 @@ int main(int argc, char **argv)
 	if (kill_only) {
 		bpf_program__set_autoload(obj->progs.sig_trace, false);
 	} else {
-		bpf_program__set_autoload(obj->progs.kill_entry, false);
-		bpf_program__set_autoload(obj->progs.kill_exit, false);
-		bpf_program__set_autoload(obj->progs.tkill_entry, false);
-		bpf_program__set_autoload(obj->progs.tkill_exit, false);
-		bpf_program__set_autoload(obj->progs.tgkill_entry, false);
-		bpf_program__set_autoload(obj->progs.tgkill_exit, false);
+		bpf_program__set_autoload(obj->progs.__arm64_sys_kill, false);
+		bpf_program__set_autoload(obj->progs.__arm64_sys_kill_exit, false);
+		bpf_program__set_autoload(obj->progs.__arm64_sys_tkill, false);
+		bpf_program__set_autoload(obj->progs.__arm64_sys_tkill_exit, false);
+		bpf_program__set_autoload(obj->progs.__arm64_sys_tgkill, false);
+		bpf_program__set_autoload(obj->progs.__arm64_sys_tgkill_exit, false);
 	}
 
 	err = sigsnoop_bpf__load(obj);

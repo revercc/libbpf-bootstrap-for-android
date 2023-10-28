@@ -2,6 +2,7 @@
 /* Copyright (c) 2021~2022 Hengqi Chen */
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
+#include <bpf/bpf_tracing.h>
 #include "sigsnoop.h"
 
 #define MAX_ENTRIES	10240
@@ -67,49 +68,67 @@ cleanup:
 	return 0;
 }
 
-SEC("tracepoint/syscalls/sys_enter_kill")
-int kill_entry(struct trace_event_raw_sys_enter *ctx)
+SEC("kprobe/__arm64_sys_kill")
+int BPF_KPROBE(__arm64_sys_kill)
 {
-	pid_t tpid = (pid_t)ctx->args[0];
-	int sig = (int)ctx->args[1];
-
+	struct pt_regs *regs = (struct pt_regs*)PT_REGS_PARM1(ctx);
+	pid_t tpid;
+	if(bpf_probe_read_kernel(&tpid, sizeof(tpid), regs) < 0){
+		return 0;
+	}
+	int sig;
+	if(bpf_probe_read_kernel(&sig, sizeof(sig), (char*)regs + sizeof(u64)) < 0){
+		return 0;
+	}
 	return probe_entry(tpid, sig);
 }
 
-SEC("tracepoint/syscalls/sys_exit_kill")
-int kill_exit(struct trace_event_raw_sys_exit *ctx)
+SEC("kretprobe/__arm64_sys_kill")
+int BPF_KRETPROBE(__arm64_sys_kill_exit)
 {
-	return probe_exit(ctx, ctx->ret);
+	return probe_exit(ctx, (int)PT_REGS_RC(ctx));
 }
 
-SEC("tracepoint/syscalls/sys_enter_tkill")
-int tkill_entry(struct trace_event_raw_sys_enter *ctx)
+SEC("kprobe/__arm64_sys_tkill")
+int BPF_KPROBE(__arm64_sys_tkill)
 {
-	pid_t tpid = (pid_t)ctx->args[0];
-	int sig = (int)ctx->args[1];
-
+	struct pt_regs *regs = (struct pt_regs*)PT_REGS_PARM1(ctx);
+	pid_t tpid;
+	if(bpf_probe_read_kernel(&tpid, sizeof(tpid), regs) < 0){
+		return 0;
+	}
+	int sig;
+	if(bpf_probe_read_kernel(&sig, sizeof(sig), (char*)regs + sizeof(u64)) < 0){
+		return 0;
+	}
 	return probe_entry(tpid, sig);
 }
 
-SEC("tracepoint/syscalls/sys_exit_tkill")
-int tkill_exit(struct trace_event_raw_sys_exit *ctx)
+SEC("kretprobe/__arm64_sys_tkill")
+int BPF_KRETPROBE(__arm64_sys_tkill_exit)
 {
-	return probe_exit(ctx, ctx->ret);
+	return probe_exit(ctx, (int)PT_REGS_RC(ctx));
 }
 
-SEC("tracepoint/syscalls/sys_enter_tgkill")
-int tgkill_entry(struct trace_event_raw_sys_enter *ctx)
+SEC("kprobe/__arm64_sys_tgkill")
+int BPF_KPROBE(__arm64_sys_tgkill)
 {
-	pid_t tpid = (pid_t)ctx->args[1];
-	int sig = (int)ctx->args[2];
-
+	struct pt_regs *regs = (struct pt_regs*)PT_REGS_PARM1(ctx);
+	pid_t tpid;
+	if(bpf_probe_read_kernel(&tpid, sizeof(tpid), regs + sizeof(u64)) < 0){
+		return 0;
+	}
+	int sig;
+	if(bpf_probe_read_kernel(&sig, sizeof(sig), (char*)regs + sizeof(u64) * 2) < 0){
+		return 0;
+	}
 	return probe_entry(tpid, sig);
 }
 
-SEC("tracepoint/syscalls/sys_exit_tgkill")
-int tgkill_exit(struct trace_event_raw_sys_exit *ctx)
+SEC("kretprobe/__arm64_sys_tgkill")
+int BPF_KRETPROBE(__arm64_sys_tgkill_exit)
 {
-	return probe_exit(ctx, ctx->ret);
+	return probe_exit(ctx, (int)PT_REGS_RC(ctx));
 }
 
 SEC("tracepoint/signal/signal_generate")
