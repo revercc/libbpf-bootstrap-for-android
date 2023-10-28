@@ -31,3 +31,7 @@ Support for cross-compilation can run on the android platform libbpf-tools
 ```
 cd libbpf-tools && make
 ```
+
+# questionable
+
+The executable statically links to the Bc.a carried by gcc-aarch64-linux-gnu, which causes some platform-dependent functions in libc.a to not work on android, such as the localtime function in libc
