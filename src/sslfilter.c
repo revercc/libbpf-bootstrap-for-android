@@ -111,39 +111,29 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va
 }
 
 static volatile bool exiting = false;
-
 static void sig_handler(int sig)
 {
 	exiting = true;
 }
 
-
 #define __is_print(ch) ((unsigned int)((ch) - ' ') < 127u - ' ')
 void dump_hex(const uint8_t *buf, uint32_t size)
 {
     int i, j;
-
-    for (i = 0; i < size; i += 16)
-    {
+    for (i = 0; i < size; i += 16){
         printf("%08X: ", i);
-
-        for (j = 0; j < 16; j++)
-        {
-            if (i + j < size)
-            {
+        for (j = 0; j < 16; j++){
+            if (i + j < size) {
                 printf("%02X ", buf[i + j]);
             }
-            else
-            {
+            else {
                 printf("   ");
             }
         }
         printf(" ");
 
-        for (j = 0; j < 16; j++)
-        {
-            if (i + j < size)
-            {
+        for (j = 0; j < 16; j++) {
+            if (i + j < size) {
                 printf("%c", __is_print(buf[i + j]) ? buf[i + j] : '.');
             }
         }
