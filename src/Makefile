@@ -19,7 +19,7 @@ INCLUDES := -I$(OUTPUT) -I../libbpf/include/uapi -I$(dir $(VMLINUX)) -I$(LIBBLAZ
 CFLAGS := -g -Wall -D__TARGET_ARCH_$(ARCH)	
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
-APPS = bootstrap fentry kprobe ksyscall minimal_legacy minimal_ns minimal sockfilter tc uprobe usdt
+APPS = bootstrap fentry kprobe ksyscall minimal_legacy minimal_ns minimal sockfilter tc uprobe usdt sslfilter
 
 CARGO ?= $(shell which cargo)
 ifeq ($(strip $(CARGO)),)
