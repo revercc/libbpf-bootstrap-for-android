@@ -21,11 +21,13 @@
 
 static struct env {
 	bool verbose;
+    bool outhex;
     pid_t target_pid;
     char ssl_lib_path[PATH_MAX];
     size_t ssl_wirte_internal_offset;
     size_t ssl_read_internal_offset;
 } env = {
+    .outhex = false,
     .target_pid = 0xFFFFFFFF,
     .ssl_lib_path = {0},
     .ssl_wirte_internal_offset = 0xFFFFFFFF,
@@ -33,12 +35,13 @@ static struct env {
 };
 
 const char argp_program_doc[] =
-"USAGE: opensnoop -p -s -w -r\n"
+"USAGE: opensnoop -p -s -w -r -h\n"
 "\n"
 "  -p    : pid\n"
 "  -w    : ssl_write_internal_offset\n"
 "  -r    : ssl_read_internal_offset\n"
 "  -l    : ssl lib path\n"
+"  -h    : output hex\n"
 "";
 
 static const struct argp_option opts[] = {
@@ -46,6 +49,7 @@ static const struct argp_option opts[] = {
 	{ "writeOff", 'w', "WRITEOFF", 0, "ssl_write_internal function offset"},
 	{ "readOff", 'r', "READOFF", 0, "ssl_read_internal function offset"},
     { "sslLibPath", 'l', "SSLPATH", 0, "ssl lib path"},
+    { "outhex", 'h', NULL, 0, "output hex"},
 	{},
 };
 
@@ -90,6 +94,9 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 			argp_usage(state);
         }
         break;
+    case 'h':
+        env.outhex = true;
+        break;
     default:
 		return ARGP_ERR_UNKNOWN;
     }
@@ -110,6 +117,40 @@ static void sig_handler(int sig)
 	exiting = true;
 }
 
+
+#define __is_print(ch) ((unsigned int)((ch) - ' ') < 127u - ' ')
+void dump_hex(const uint8_t *buf, uint32_t size)
+{
+    int i, j;
+
+    for (i = 0; i < size; i += 16)
+    {
+        printf("%08X: ", i);
+
+        for (j = 0; j < 16; j++)
+        {
+            if (i + j < size)
+            {
+                printf("%02X ", buf[i + j]);
+            }
+            else
+            {
+                printf("   ");
+            }
+        }
+        printf(" ");
+
+        for (j = 0; j < 16; j++)
+        {
+            if (i + j < size)
+            {
+                printf("%c", __is_print(buf[i + j]) ? buf[i + j] : '.');
+            }
+        }
+        printf("\n");
+    }
+}
+
 // 打印perfbuffer中的数据
 void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 {
@@ -118,14 +159,24 @@ void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
         printf("\e[0;31m");
         printf("SSL_write-------------------------------------------------------\n");
         printf("%-10d %-32s %-10d\n", ssl_filter_info->pid, ssl_filter_info->comm, ssl_filter_info->size);
-        printf("%s", ssl_filter_info->buf);
+        if(env.outhex == true){
+            dump_hex((uint8_t*)ssl_filter_info->buf, ssl_filter_info->size);
+        }
+        else{
+            printf("%s", ssl_filter_info->buf);
+        }
         printf("\e[0m" );
     }
     else{
         printf("\e[0;32m");
         printf("SSL_read--------------------------------------------------------\n");
         printf("%-10d %-32s %-10d\n", ssl_filter_info->pid, ssl_filter_info->comm, ssl_filter_info->size);
-        printf("%s", ssl_filter_info->buf);
+        if(env.outhex == true){
+            dump_hex((uint8_t*)ssl_filter_info->buf, ssl_filter_info->size);
+        }
+        else{
+            printf("%s", ssl_filter_info->buf);
+        }
         printf("\e[0m" );
     }
 }
