@@ -45,12 +45,15 @@ SEC("kprobe/do_execveat_common")
 int BPF_KPROBE(do_execveat_common)
 {
 	u64 id;
-	pid_t pid, tgid;
 	int ret;
+	pid_t pid, tgid;
 	struct event *event;
 	struct task_struct *task;
-	const char **args = (const char **)PT_REGS_PARM6(ctx);
-	const char *argp;
+	const char **args = (const char **)PT_REGS_PARM4(ctx);
+	const char *argp = NULL;
+	if(!bpf_core_field_exists(((struct user_arg_ptr *)0)->is_compat)){
+		args = (const char **)PT_REGS_PARM3(ctx);
+	}
 
 	if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
 		return 0;
@@ -78,11 +81,9 @@ int BPF_KPROBE(do_execveat_common)
 	event->args_count = 0;
 	event->args_size = 0;
 
-	struct filename * p_file_name;
-	p_file_name = (struct filename *)PT_REGS_PARM2(ctx);
-	bpf_printk("p_file_name is %p", p_file_name);
-	char* p_name;
-	ret = bpf_probe_read_kernel(&p_name, sizeof(p_name), p_file_name);
+	const char* p_name;
+	struct filename * p_file_name = (struct filename *)PT_REGS_PARM2(ctx);
+	ret = bpf_core_read(&p_name, sizeof(p_name), &p_file_name->name);
 	if(ret < 0){
 		return 0;
 	}
