@@ -1444,6 +1444,7 @@ typedef void (*perf_buffer_lost_fn)(void *ctx, int cpu, __u64 cnt);
 /* common use perf buffer options */
 struct perf_buffer_opts {
 	size_t sz;
+	__u32 unwind_call_stack;
 	__u32 sample_period;
 	size_t :0;
 };

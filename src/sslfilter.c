@@ -6,6 +6,7 @@
 #include <linux/limits.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <signal.h>
 #include <string.h>
@@ -19,15 +20,24 @@
 // 获取响应的超时时间
 #define PERF_POLL_TIMEOUT_MS	100
 
+// 保存栈函数调用链
+struct bpf_stacktrace {
+    uint64_t ip[0x10];
+};
+
 static struct env {
 	bool verbose;
     bool outhex;
+    bool print_stack;
+    bool frame_point;
     pid_t target_pid;
     char ssl_lib_path[PATH_MAX];
     size_t ssl_wirte_internal_offset;
     size_t ssl_read_internal_offset;
 } env = {
     .outhex = false,
+    .print_stack = false,
+    .frame_point = false,
     .target_pid = 0xFFFFFFFF,
     .ssl_lib_path = {0},
     .ssl_wirte_internal_offset = 0xFFFFFFFF,
@@ -35,13 +45,15 @@ static struct env {
 };
 
 const char argp_program_doc[] =
-"USAGE: opensnoop -p -s -w -r -h\n"
+"USAGE: opensnoop -p -s -w -r -h -s -f\n"
 "\n"
 "  -p    : pid\n"
 "  -w    : ssl_write_internal_offset\n"
 "  -r    : ssl_read_internal_offset\n"
 "  -l    : ssl lib path\n"
 "  -h    : output hex\n"
+"  -s    : print stack\n"
+"  -f    : print frame point\n"
 "";
 
 static const struct argp_option opts[] = {
@@ -50,8 +62,12 @@ static const struct argp_option opts[] = {
 	{ "readOff", 'r', "READOFF", 0, "ssl_read_internal function offset"},
     { "sslLibPath", 'l', "SSLPATH", 0, "ssl lib path"},
     { "outhex", 'h', NULL, 0, "output hex"},
+    { "stack", 's', NULL, 0, "print stack"},
+    { "framepoint", 'f', NULL, 0, "print frame point"},
 	{},
 };
+
+struct sslfilter_bpf* skel;
 
 static error_t parse_arg(int key, char *arg, struct argp_state *state)
 {
@@ -96,6 +112,12 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
         break;
     case 'h':
         env.outhex = true;
+        break;
+    case 's':
+        env.print_stack = true;
+        break;
+    case 'f':
+        env.frame_point = true;
         break;
     default:
 		return ARGP_ERR_UNKNOWN;
@@ -145,6 +167,23 @@ void dump_hex(const uint8_t *buf, uint32_t size)
 void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 {
     struct SSL_FILTER_INFO *ssl_filter_info = data;
+    // print function call list
+    if(env.frame_point == true){
+        struct bpf_stacktrace stacktrace = {0};
+        if (bpf_map_lookup_elem(
+            bpf_map__fd(skel->maps.stack_map),
+            &ssl_filter_info->stack_id,
+            &stacktrace) == 0){
+            printf("\nstack_id = %lld:\n", ssl_filter_info->stack_id);
+            for(int i = 0; i < 0x10; i++){
+                if(stacktrace.ip[i]){
+                    printf("address : %p\n", (void*)stacktrace.ip[i]);
+                } 
+            }
+        }
+    }
+
+    // printf data
     if(ssl_filter_info->bWrite){
         printf("\e[0;31m");
         printf("SSL_write-------------------------------------------------------\n");
@@ -153,7 +192,7 @@ void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
             dump_hex((uint8_t*)ssl_filter_info->buf, ssl_filter_info->size);
         }
         else{
-            printf("%s", ssl_filter_info->buf);
+            printf("%s\n", ssl_filter_info->buf);
         }
         printf("\e[0m" );
     }
@@ -165,7 +204,7 @@ void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
             dump_hex((uint8_t*)ssl_filter_info->buf, ssl_filter_info->size);
         }
         else{
-            printf("%s", ssl_filter_info->buf);
+            printf("%s\n", ssl_filter_info->buf);
         }
         printf("\e[0m" );
     }
@@ -179,7 +218,7 @@ void handle_lost_events(void *ctx, int cpu, __u64 lost_cnt)
 int main(int argc, char *argv[], char *envp[])
 {
     int err;
-    struct sslfilter_bpf* skel;
+    //struct sslfilter_bpf* skel;
     struct perf_buffer *perfbuf = NULL;
     LIBBPF_OPTS(bpf_object_open_opts, open_opts);
 
@@ -254,14 +293,22 @@ int main(int argc, char *argv[], char *envp[])
         goto cleanup;
     }
 
-    // 获取perf event map的文件句柄并设置时间响应回调函数，回调函数中对perfbuffer中的数据进行打印输出
-	perfbuf = perf_buffer__new(
+    // 是否打印堆栈
+	struct perf_buffer_opts perf_opts = {};
+    perf_opts.sz = sizeof(perf_opts);
+    if(env.print_stack == true){
+        perf_opts.unwind_call_stack = 1;
+    }
+    
+    // bpf_map__fd获取perf event map的文件句柄
+    // perf_buffer__new调用perf_open_event
+    perfbuf = perf_buffer__new(
         bpf_map__fd(skel->maps.events), 
         PERF_BUFFER_PAGES,
 		handle_event, 
         handle_lost_events, 
-        NULL, 
-        NULL);
+        NULL,
+        &perf_opts);
 
 	if (!perfbuf) {
 		err = -errno;
@@ -276,7 +323,7 @@ int main(int argc, char *argv[], char *envp[])
 		goto cleanup;
 	}
 
-    // 轮询获取响应
+    // 轮询读取perfbuffer
 	while (!exiting) {
 		err = perf_buffer__poll(perfbuf, PERF_POLL_TIMEOUT_MS);
 		if (err < 0 && err != -EINTR) {

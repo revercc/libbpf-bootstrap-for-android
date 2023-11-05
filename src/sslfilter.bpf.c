@@ -18,6 +18,7 @@ struct{
 struct READ_ENTRY_ARGS{
     u64 buf_address;
     u64 readbytes_address;
+    u64 stack_id;
 };
 
 struct{
@@ -35,6 +36,15 @@ struct{
     __uint(value_size, sizeof(u32));    
 } events SEC(".maps");
 
+// BPF_MAP_TYPE_STACK_TRACE类型map 用来保存栈调用链信息
+// key 就是bpf_get_stackid生成的栈信息hash值
+// value 就是对应的栈调用链，设置大小就是设置最大获取的栈调用深度
+struct{
+    __uint(type, BPF_MAP_TYPE_STACK_TRACE);
+    __uint(key_size, sizeof(u32));
+    __uint(value_size, 0x10 * sizeof(u64));
+    __uint(max_entries, 1000);
+}stack_map SEC(".maps");
 
 //int ssl_write_internal(SSL *s, const void *buf, size_t num, size_t *written)
 SEC("uprobe")
@@ -56,8 +66,12 @@ int BPF_KPROBE(ssl_write_internal_entry, void *SSL, void *buf, size_t num, size_
         return 0;
     }
 
+    // get starck function call list and get stack_id
+    p_filter_info->stack_id = bpf_get_stackid(ctx, &stack_map, BPF_F_USER_STACK);
+
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
         p_filter_info, sizeof(*p_filter_info));
+
     return 0;
 }
 
@@ -68,6 +82,8 @@ int BPF_KPROBE(ssl_read_internal_entry, void *SSL, void *buf, size_t num, size_t
     struct READ_ENTRY_ARGS args = {};
     args.readbytes_address = (u64)readbytes;
     args.buf_address = (u64)buf;
+     // get starck function call list and get stack_id
+    args.stack_id = bpf_get_stackid(ctx, &stack_map, BPF_F_USER_STACK);
     u64 pid_tgid = bpf_get_current_pid_tgid();
     bpf_map_update_elem(&read_entry_args, &pid_tgid, &args, BPF_ANY);
     return 0;
@@ -101,6 +117,7 @@ int BPF_KRETPROBE(ssl_read_internal_exit, int ret)
     p_filter_info->pid = pid;
     p_filter_info->size = readbytes;
     p_filter_info->bWrite = false;
+    p_filter_info->stack_id = p_args->stack_id;
     bpf_get_current_comm(&p_filter_info->comm, sizeof(p_filter_info->comm));
     if(bpf_probe_read_user(&p_filter_info->buf, 
         readbytes < sizeof(p_filter_info->buf) ? readbytes : sizeof(p_filter_info->buf), 
@@ -108,7 +125,6 @@ int BPF_KRETPROBE(ssl_read_internal_exit, int ret)
         return 0;
     }
 
-    bpf_printk("read : %d", readbytes);
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, 
         p_filter_info, sizeof(*p_filter_info));
     return 0;
