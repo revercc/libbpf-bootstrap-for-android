@@ -275,9 +275,12 @@ int main(int argc, char **argv)
 	printf("%s", "PATH");
 	printf("\n");
 
+	struct perf_buffer_opts opts = {};
+	opts.sz = sizeof(struct perf_buffer_opts);
+	opts.unwind_call_stack = 1;
 	/* setup event callbacks */
 	pb = perf_buffer__new(bpf_map__fd(obj->maps.events), PERF_BUFFER_PAGES,
-			      handle_event, handle_lost_events, NULL, NULL);
+			      handle_event, handle_lost_events, NULL, &opts);
 	if (!pb) {
 		err = -errno;
 		fprintf(stderr, "failed to open perf buffer: %d\n", err);
